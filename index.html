@@ -1,129 +1,117 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
+
 <head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
     <title>Todo App</title>
 </head>
+
 <body>
 
 <h1>Todo App</h1>
 
-<input id="title" type="text" placeholder="Enter todo">
-<button id="addButton">Add Todo</button>
+
+<!-- =========================
+     LOGIN
+========================= -->
+
+<h2>Login</h2>
+
+<input
+    id="email"
+    type="email"
+    placeholder="Email"
+>
+
+<br><br>
+
+<input
+    id="password"
+    type="password"
+    placeholder="Password"
+>
+
+<br><br>
+
+<button id="loginButton">
+    Login
+</button>
+
+
+<p id="loginResult"></p>
+
+
+<hr>
+
+
+<!-- =========================
+     TODO SECTION
+========================= -->
+
+<h2>Add Todo</h2>
+
+<input
+    id="title"
+    type="text"
+    placeholder="Enter todo"
+>
+
+<button id="addButton">
+    Add Todo
+</button>
+
 
 <p id="result"></p>
 
+
 <h2>My Todos</h2>
+
 <ul id="todoList"></ul>
+
 
 <script>
 
-async function loadTodos() {
 
-    try {
-        const response = await fetch("http://127.0.0.1:8000/todos");
-        const todos = await response.json();
-
-        const todoList = document.getElementById("todoList");
-        todoList.innerHTML = "";
-
-        todos.forEach(todo => {
-
-            const li = document.createElement("li");
-
-            li.innerText =
-                todo.title + " - " +
-                (todo.completed ? "Completed" : "Not completed");
-
-            // Update button
-            const updateButton = document.createElement("button");
-            updateButton.innerText = "Update";
-
-            updateButton.onclick = async function () {
-
-                const newTitle = prompt(
-                    "Enter new title:",
-                    todo.title
-                );
-
-                if (newTitle === null || newTitle.trim() === "") {
-                    return;
-                }
-
-                const response = await fetch(
-                    `http://127.0.0.1:8000/todos/${todo._id}`,
-                    {
-                        method: "PUT",
-                        headers: {
-                            "Content-Type": "application/json"
-                        },
-                        body: JSON.stringify({
-                            title: newTitle,
-                            completed: todo.completed
-                        })
-                    }
-                );
-
-                const data = await response.json();
-
-                document.getElementById("result").innerText =
-                    data.message;
-
-                loadTodos();
-            };
-
-            // Delete button
-            const deleteButton = document.createElement("button");
-            deleteButton.innerText = "Delete";
-
-            deleteButton.onclick = async function () {
-
-                const response = await fetch(
-                    `http://127.0.0.1:8000/todos/${todo._id}`,
-                    {
-                        method: "DELETE"
-                    }
-                );
-
-                const data = await response.json();
-
-                document.getElementById("result").innerText =
-                    data.message;
-
-                loadTodos();
-            };
-
-            li.appendChild(document.createTextNode(" "));
-            li.appendChild(updateButton);
-
-            li.appendChild(document.createTextNode(" "));
-            li.appendChild(deleteButton);
-
-            todoList.appendChild(li);
-        });
-
-    } catch (error) {
-
-        document.getElementById("result").innerText =
-            "ERROR: " + error;
-    }
-}
+const API_URL = "http://127.0.0.1:8000";
 
 
-// Add Todo
-document.getElementById("addButton").addEventListener(
-    "click",
-    async function () {
+// ========================================
+// TOKEN
+// ========================================
 
-        const title = document.getElementById("title").value;
+let token = localStorage.getItem("access_token");
 
-        if (title.trim() === "") {
+
+// ========================================
+// LOGIN
+// ========================================
+
+document
+    .getElementById("loginButton")
+    .addEventListener("click", async function () {
+
+        const email =
+            document.getElementById("email").value;
+
+        const password =
+            document.getElementById("password").value;
+
+
+        if (!email || !password) {
+
+            document.getElementById("loginResult").innerText =
+                "Enter email and password";
+
             return;
         }
+
 
         try {
 
             const response = await fetch(
-                "http://127.0.0.1:8000/todos",
+                `${API_URL}/login`,
                 {
                     method: "POST",
 
@@ -132,32 +120,379 @@ document.getElementById("addButton").addEventListener(
                     },
 
                     body: JSON.stringify({
-                        title: title,
-                        completed: false
+                        email: email,
+                        password: password
                     })
                 }
             );
 
+
             const data = await response.json();
 
-            document.getElementById("result").innerText =
-                data.message;
 
-            document.getElementById("title").value = "";
+            if (!response.ok) {
+
+                document.getElementById("loginResult").innerText =
+                    data.detail || "Login failed";
+
+                return;
+            }
+
+
+            // Save JWT token
+
+            token = data.access_token;
+
+            localStorage.setItem(
+                "access_token",
+                token
+            );
+
+
+            document.getElementById("loginResult").innerText =
+                "Login successful!";
+
+
+            // Load user's todos
 
             loadTodos();
 
         } catch (error) {
 
-            document.getElementById("result").innerText =
-                "ERROR: " + error;
+            document.getElementById("loginResult").innerText =
+                "ERROR: " + error.message;
         }
+
+    });
+
+
+// ========================================
+// LOAD TODOS
+// ========================================
+
+async function loadTodos() {
+
+    if (!token) {
+
+        document.getElementById("result").innerText =
+            "Please login first.";
+
+        return;
     }
-);
 
 
-// Load Todos when page opens
-loadTodos();
+    try {
+
+        const response = await fetch(
+            `${API_URL}/todos`,
+            {
+                headers: {
+                    "Authorization": `Bearer ${token}`
+                }
+            }
+        );
+
+
+        if (response.status === 401) {
+
+            localStorage.removeItem("access_token");
+
+            token = null;
+
+            document.getElementById("result").innerText =
+                "Session expired. Please login again.";
+
+            return;
+        }
+
+
+        if (!response.ok) {
+            throw new Error("Failed to load todos");
+        }
+
+
+        const todos = await response.json();
+
+
+        const todoList =
+            document.getElementById("todoList");
+
+
+        todoList.innerHTML = "";
+
+
+        todos.forEach(todo => {
+
+            const li =
+                document.createElement("li");
+
+
+            li.innerText =
+                todo.title +
+                " - " +
+                (
+                    todo.completed
+                        ? "Completed"
+                        : "Not completed"
+                );
+
+
+            // ========================================
+            // UPDATE
+            // ========================================
+
+            const updateButton =
+                document.createElement("button");
+
+
+            updateButton.innerText =
+                "Update";
+
+
+            updateButton.onclick = async function () {
+
+                const newTitle = prompt(
+                    "Enter new title:",
+                    todo.title
+                );
+
+
+                if (
+                    newTitle === null ||
+                    newTitle.trim() === ""
+                ) {
+                    return;
+                }
+
+
+                try {
+
+                    const response = await fetch(
+                        `${API_URL}/todos/${todo._id}`,
+                        {
+                            method: "PUT",
+
+                            headers: {
+                                "Content-Type": "application/json",
+
+                                "Authorization":
+                                    `Bearer ${token}`
+                            },
+
+                            body: JSON.stringify({
+                                title: newTitle.trim(),
+                                completed: todo.completed
+                            })
+                        }
+                    );
+
+
+                    const data =
+                        await response.json();
+
+
+                    if (!response.ok) {
+
+                        document.getElementById("result").innerText =
+                            data.detail || "Update failed";
+
+                        return;
+                    }
+
+
+                    document.getElementById("result").innerText =
+                        data.message || "Todo updated";
+
+
+                    loadTodos();
+
+                } catch (error) {
+
+                    document.getElementById("result").innerText =
+                        "ERROR: " + error.message;
+                }
+
+            };
+
+
+            // ========================================
+            // DELETE
+            // ========================================
+
+            const deleteButton =
+                document.createElement("button");
+
+
+            deleteButton.innerText =
+                "Delete";
+
+
+            deleteButton.onclick = async function () {
+
+                try {
+
+                    const response = await fetch(
+                        `${API_URL}/todos/${todo._id}`,
+                        {
+                            method: "DELETE",
+
+                            headers: {
+                                "Authorization":
+                                    `Bearer ${token}`
+                            }
+                        }
+                    );
+
+
+                    const data =
+                        await response.json();
+
+
+                    if (!response.ok) {
+
+                        document.getElementById("result").innerText =
+                            data.detail || "Delete failed";
+
+                        return;
+                    }
+
+
+                    document.getElementById("result").innerText =
+                        data.message || "Todo deleted";
+
+
+                    loadTodos();
+
+                } catch (error) {
+
+                    document.getElementById("result").innerText =
+                        "ERROR: " + error.message;
+                }
+
+            };
+
+
+            li.appendChild(
+                document.createTextNode(" ")
+            );
+
+            li.appendChild(updateButton);
+
+
+            li.appendChild(
+                document.createTextNode(" ")
+            );
+
+            li.appendChild(deleteButton);
+
+
+            todoList.appendChild(li);
+
+        });
+
+
+    } catch (error) {
+
+        document.getElementById("result").innerText =
+            "ERROR: " + error.message;
+    }
+
+}
+
+
+// ========================================
+// ADD TODO
+// ========================================
+
+document
+    .getElementById("addButton")
+    .addEventListener("click", async function () {
+
+
+        if (!token) {
+
+            document.getElementById("result").innerText =
+                "Please login first.";
+
+            return;
+        }
+
+
+        const title =
+            document.getElementById("title").value;
+
+
+        if (title.trim() === "") {
+
+            document.getElementById("result").innerText =
+                "Please enter a todo.";
+
+            return;
+        }
+
+
+        try {
+
+            const response = await fetch(
+                `${API_URL}/todos`,
+                {
+                    method: "POST",
+
+                    headers: {
+                        "Content-Type": "application/json",
+
+                        "Authorization":
+                            `Bearer ${token}`
+                    },
+
+                    body: JSON.stringify({
+                        title: title.trim(),
+                        completed: false
+                    })
+                }
+            );
+
+
+            const data =
+                await response.json();
+
+
+            if (!response.ok) {
+
+                document.getElementById("result").innerText =
+                    data.detail || "Failed to add todo";
+
+                return;
+            }
+
+
+            document.getElementById("result").innerText =
+                data.message || "Todo added";
+
+
+            document.getElementById("title").value = "";
+
+
+            loadTodos();
+
+
+        } catch (error) {
+
+            document.getElementById("result").innerText =
+                "ERROR: " + error.message;
+        }
+
+    });
+
+
+// ========================================
+// LOAD TODOS IF ALREADY LOGGED IN
+// ========================================
+
+if (token) {
+    loadTodos();
+}
+
 
 </script>
 
