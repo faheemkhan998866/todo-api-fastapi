@@ -1,0 +1,165 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Todo App</title>
+</head>
+<body>
+
+<h1>Todo App</h1>
+
+<input id="title" type="text" placeholder="Enter todo">
+<button id="addButton">Add Todo</button>
+
+<p id="result"></p>
+
+<h2>My Todos</h2>
+<ul id="todoList"></ul>
+
+<script>
+
+async function loadTodos() {
+
+    try {
+        const response = await fetch("http://127.0.0.1:8000/todos");
+        const todos = await response.json();
+
+        const todoList = document.getElementById("todoList");
+        todoList.innerHTML = "";
+
+        todos.forEach(todo => {
+
+            const li = document.createElement("li");
+
+            li.innerText =
+                todo.title + " - " +
+                (todo.completed ? "Completed" : "Not completed");
+
+            // Update button
+            const updateButton = document.createElement("button");
+            updateButton.innerText = "Update";
+
+            updateButton.onclick = async function () {
+
+                const newTitle = prompt(
+                    "Enter new title:",
+                    todo.title
+                );
+
+                if (newTitle === null || newTitle.trim() === "") {
+                    return;
+                }
+
+                const response = await fetch(
+                    `http://127.0.0.1:8000/todos/${todo._id}`,
+                    {
+                        method: "PUT",
+                        headers: {
+                            "Content-Type": "application/json"
+                        },
+                        body: JSON.stringify({
+                            title: newTitle,
+                            completed: todo.completed
+                        })
+                    }
+                );
+
+                const data = await response.json();
+
+                document.getElementById("result").innerText =
+                    data.message;
+
+                loadTodos();
+            };
+
+            // Delete button
+            const deleteButton = document.createElement("button");
+            deleteButton.innerText = "Delete";
+
+            deleteButton.onclick = async function () {
+
+                const response = await fetch(
+                    `http://127.0.0.1:8000/todos/${todo._id}`,
+                    {
+                        method: "DELETE"
+                    }
+                );
+
+                const data = await response.json();
+
+                document.getElementById("result").innerText =
+                    data.message;
+
+                loadTodos();
+            };
+
+            li.appendChild(document.createTextNode(" "));
+            li.appendChild(updateButton);
+
+            li.appendChild(document.createTextNode(" "));
+            li.appendChild(deleteButton);
+
+            todoList.appendChild(li);
+        });
+
+    } catch (error) {
+
+        document.getElementById("result").innerText =
+            "ERROR: " + error;
+    }
+}
+
+
+// Add Todo
+document.getElementById("addButton").addEventListener(
+    "click",
+    async function () {
+
+        const title = document.getElementById("title").value;
+
+        if (title.trim() === "") {
+            return;
+        }
+
+        try {
+
+            const response = await fetch(
+                "http://127.0.0.1:8000/todos",
+                {
+                    method: "POST",
+
+                    headers: {
+                        "Content-Type": "application/json"
+                    },
+
+                    body: JSON.stringify({
+                        title: title,
+                        completed: false
+                    })
+                }
+            );
+
+            const data = await response.json();
+
+            document.getElementById("result").innerText =
+                data.message;
+
+            document.getElementById("title").value = "";
+
+            loadTodos();
+
+        } catch (error) {
+
+            document.getElementById("result").innerText =
+                "ERROR: " + error;
+        }
+    }
+);
+
+
+// Load Todos when page opens
+loadTodos();
+
+</script>
+
+</body>
+</html>
